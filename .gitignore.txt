@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+
+# Virtual env
+venv/
+env/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+
+# Docker
+*.log
+
+# Known faces images (do not push personal images)
+backend/known_faces/*.jpg
+backend/known_faces/*.png
+
+# Large model file (optional — see note below)
+# backend/app/models/face_landmarker.task
