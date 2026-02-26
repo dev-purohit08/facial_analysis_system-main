@@ -142,7 +142,7 @@ Frontend runs on:
 http://localhost:3000
 💻 Local Development (Without Docker)
 1️⃣ Clone Repository
-git clone https://github.com/dev-purohit08/facial-analysis-system.git
+git clone https://github.com/dev-purohit08/facial-analysis-system-main.git
 cd facial-analysis-system/backend
 2️⃣ Create Virtual Environment
 python -m venv .venv
