@@ -1,105 +1,104 @@
-Real Time Facial Analysis System
+# Real Time Facial Analysis System
 
-A full-stack, Dockerized AI web application built using FastAPI, MediaPipe, and OpenCV that performs real-time facial analysis directly in the browser.
+A full-stack, Dockerized AI web application built using **FastAPI, MediaPipe, and OpenCV** that performs real-time facial analysis directly in the browser.
 
 The system supports:
 
-Facial Landmark Detection
-
-Emotion Detection
-
-Drowsiness Detection (with Browser Alarm)
-
-Face Recognition
-
-Face Enrollment
+* Facial Landmark Detection
+* Emotion Detection
+* Drowsiness Detection (with Browser Alarm)
+* Face Recognition
+* Face Enrollment
 
 The application is fully browser-based and cloud deployable.
 
-🚀 Live Demo
+---
+
+## 🚀 Live Demo
 
 (Deployment link will be added here)
 
-🏗 System Architecture
+---
+
+# 🏗 System Architecture
 
 Frontend:
 
-HTML
-
-CSS
-
-JavaScript
-
-Web Camera API (getUserMedia)
-
-Nginx (for static serving)
+* HTML
+* CSS
+* JavaScript
+* Web Camera API (getUserMedia)
+* Nginx (for static serving)
 
 Backend:
 
-FastAPI
-
-MediaPipe Face Landmarker
-
-OpenCV
-
-NumPy
+* FastAPI
+* MediaPipe Face Landmarker
+* OpenCV
+* NumPy
 
 Deployment:
 
-Docker & Docker Compose
+* Docker & Docker Compose
+* Cloud ready (Render / AWS / EC2 / Railway)
 
-Cloud ready (Render / AWS / EC2 / Railway)
+---
 
-🧠 Features
-1️⃣ Facial Landmark Detection
+# 🧠 Features
+
+## 1️⃣ Facial Landmark Detection
 
 Detects and visualizes 468 facial landmarks in real time using MediaPipe Face Landmarker.
 
-2️⃣ Emotion Detection
+---
+
+## 2️⃣ Emotion Detection
 
 Classifies facial expressions into:
 
-Happy
-
-Sad
-
-Angry
-
-Surprised
-
-Neutral
+* Happy
+* Sad
+* Angry
+* Surprised
+* Neutral
 
 Includes smoothing logic to prevent rapid flickering between emotions.
 
-3️⃣ Drowsiness Detection
+---
+
+## 3️⃣ Drowsiness Detection
 
 Uses Eye Aspect Ratio (EAR) to detect eye closure.
 
-Detects closed eyes in real time
-
-Triggers browser-based alarm sound
-
-Alarm automatically stops when eyes reopen
+* Detects closed eyes in real time
+* Triggers browser-based alarm sound
+* Alarm automatically stops when eyes reopen
 
 Alarm is handled entirely on the frontend.
 
-4️⃣ Face Recognition
+---
+
+## 4️⃣ Face Recognition
 
 Matches detected faces against enrolled users using landmark vector similarity.
 
-5️⃣ Face Enrollment
+---
+
+## 5️⃣ Face Enrollment
 
 Allows users to:
 
-Capture a face image
-
-Save it to the backend
-
-Automatically add it to recognition memory
+* Capture a face image
+* Save it to the backend
+* Automatically add it to recognition memory
 
 Includes success/error toast notifications.
 
-📂 Project Structure
+---
+
+# 📂 Project Structure
+
+```
 facial-analysis-system/
 │
 ├── backend/
@@ -125,96 +124,138 @@ facial-analysis-system/
 │
 ├── docker-compose.yml
 └── README.md
-🐳 Docker Setup (Recommended)
-Run with Docker Compose
+```
+
+---
+
+# 🐳 Docker Setup (Recommended)
+
+## Run with Docker Compose
 
 From project root:
 
+```bash
 docker compose build
 docker compose up
+```
 
 Backend runs on:
 
+```
 http://localhost:8000
+```
 
 Frontend runs on:
 
+```
 http://localhost:3000
-💻 Local Development (Without Docker)
-1️⃣ Clone Repository
-git clone https://github.com/dev-purohit08/facial-analysis-system-main.git
+```
+
+---
+
+# 💻 Local Development (Without Docker)
+
+## 1️⃣ Clone Repository
+
+```bash
+git clone https://github.com/dev-purohit08/facial_analysis_system-main.git
 cd facial-analysis-system/backend
-2️⃣ Create Virtual Environment
+```
+
+## 2️⃣ Create Virtual Environment
+
+```bash
 python -m venv .venv
-Activate
+```
+
+### Activate
 
 Windows:
 
+```bash
 .venv\Scripts\activate
+```
 
 Mac/Linux:
 
+```bash
 source .venv/bin/activate
-3️⃣ Install Dependencies
+```
+
+## 3️⃣ Install Dependencies
+
+```bash
 pip install -r requirements.txt
-4️⃣ Run Backend
+```
+
+## 4️⃣ Run Backend
+
+```bash
 uvicorn app.main:app --reload
+```
 
-Open frontend manually via frontend/static/index.html.
+Open frontend manually via `frontend/static/index.html`.
 
-🌐 Cloud Deployment
+---
+
+# 🌐 Cloud Deployment
 
 The backend can be deployed on:
 
-Render
-
-Railway
-
-AWS EC2
-
-Any Docker-supported cloud platform
+* Render
+* Railway
+* AWS EC2
+* Any Docker-supported cloud platform
 
 Start command:
 
+```bash
 uvicorn app.main:app --host 0.0.0.0 --port 10000
+```
 
 Python Version:
 
+```
 3.10.x
-⚠️ Important Notes
+```
 
-Browser camera access is required.
+---
 
-Backend does NOT use server webcam.
+# ⚠️ Important Notes
 
-Alarm sound is triggered in frontend only.
+* Browser camera access is required.
+* Backend does NOT use server webcam.
+* Alarm sound is triggered in frontend only.
+* `face_landmarker.task` must exist in:
 
-face_landmarker.task must exist in:
+  ```
+  backend/app/models/
+  ```
+* `known_faces/` is mounted as a Docker volume.
 
-backend/app/models/
+---
 
-known_faces/ is mounted as a Docker volume.
+# 🔒 Security Notes
 
-🔒 Security Notes
+* No biometric data is stored permanently unless images are saved in `known_faces/`.
+* For production deployment, HTTPS is required for camera access.
 
-No biometric data is stored permanently unless images are saved in known_faces/.
+---
 
-For production deployment, HTTPS is required for camera access.
+# 📈 Future Improvements
 
-📈 Future Improvements
+* Persistent face embedding storage (database instead of memory)
+* GPU acceleration support
+* User authentication
+* Rate limiting
+* CI/CD pipeline
 
-Persistent face embedding storage (database instead of memory)
+---
 
-GPU acceleration support
-
-User authentication
-
-Rate limiting
-
-CI/CD pipeline
-
-👨‍💻 Author
+# 👨‍💻 Author
 
 Dev Purohit
 MCA Final Year Project
 Real Time Facial Analysis System
+
+
