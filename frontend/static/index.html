@@ -159,173 +159,202 @@
     </div>
 
     <script>
-    const BASE_URL = "http://100.52.254.189:8000";
+/**
+ * IMPORTANT:
+ * If you're using nginx proxy (recommended), keep BASE_URL = "/api"
+ * so it works with https://100.52.254.189 without mixed-content issues.
+ */
+const BASE_URL = "/api";
 
-    let videoElement = document.createElement("video");
-    let canvas = document.createElement("canvas");
-    let ctx = canvas.getContext("2d");
+let videoElement = document.createElement("video");
+videoElement.playsInline = true; // iOS compatibility
+videoElement.muted = true;       // avoid autoplay blocks
 
-    let currentMode = "landmark";
-    let processing = false;
-    let streaming = false;
+let canvas = document.createElement("canvas");
+let ctx = canvas.getContext("2d", { willReadFrequently: true });
 
-    let alarm = document.getElementById("alarmSound");
-    let audioUnlocked = false;
-    let alarmPlaying = false;
+let currentMode = "landmark";
+let processing = false;
+let streaming = false;
 
-    /* ---------- AUDIO UNLOCK (STRONG VERSION) ---------- */
-    document.addEventListener("click", () => {
-        if (!audioUnlocked) {
-            alarm.muted = false;
-            alarm.volume = 1.0;
+let alarm = document.getElementById("alarmSound");
+let audioUnlocked = false;
+let alarmPlaying = false;
 
-            alarm.play().then(() => {
-                alarm.pause();
-                alarm.currentTime = 0;
-                audioUnlocked = true;
-                console.log("Audio unlocked successfully");
-            }).catch(err => {
-                console.log("Unlock failed:", err);
-            });
-        }
-    });
+/* ---------- PERFORMANCE TUNING ---------- */
+const TARGET_FPS = 8;                 // Try 6–10
+const FRAME_INTERVAL_MS = 1000 / TARGET_FPS;
 
-    /* ---------- CAMERA INIT ---------- */
-    navigator.mediaDevices.getUserMedia({ video: true })
-    .then(stream => {
-        videoElement.srcObject = stream;
-        videoElement.play();
+const SEND_W = 640;                   // Downscale width
+const SEND_H = 360;                   // Downscale height (16:9). Try 480x360 too.
+const JPEG_QUALITY = 0.6;             // 0.5–0.7 usually best
+
+let lastSentAt = 0;
+
+/* ---------- AUDIO UNLOCK ---------- */
+document.addEventListener("click", () => {
+  if (audioUnlocked) return;
+
+  alarm.muted = false;
+  alarm.volume = 1.0;
+
+  alarm.play().then(() => {
+    alarm.pause();
+    alarm.currentTime = 0;
+    audioUnlocked = true;
+    console.log("Audio unlocked successfully");
+  }).catch(err => console.log("Unlock failed:", err));
+});
+
+/* ---------- CAMERA INIT ---------- */
+navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 } })
+  .then(stream => {
+    videoElement.srcObject = stream;
+    return videoElement.play();
+  })
+  .catch(() => showToast("Camera permission denied", "error"));
+
+/* ---------- PAGE NAV ---------- */
+function showAnalysis() {
+  stopStreaming();
+  switchPage("analysis");
+  streaming = true;
+  requestAnimationFrame(loop);
+}
+
+function showEnroll() {
+  stopStreaming();
+  switchPage("enroll");
+  streaming = true;
+  requestAnimationFrame(loop);
+}
+
+function goHome() {
+  stopStreaming();
+  stopAlarm();
+  switchPage("home");
+}
+
+function stopStreaming() {
+  streaming = false;
+  processing = false;
+  document.getElementById("video").src = "";
+  document.getElementById("videoEnroll").src = "";
+}
+
+function switchPage(id) {
+  document.querySelectorAll(".section").forEach(s => s.classList.remove("active"));
+  document.getElementById(id).classList.add("active");
+}
+
+/* ---------- MODE ---------- */
+function setMode(mode) {
+  currentMode = mode;
+}
+
+/* ---------- ALARM CONTROL ---------- */
+function startAlarm() {
+  if (!audioUnlocked) return;
+
+  if (!alarmPlaying) {
+    alarm.loop = true;
+    alarm.currentTime = 0;
+    alarm.play().then(() => {
+      alarmPlaying = true;
+    }).catch(err => console.log("Playback blocked:", err));
+  }
+}
+
+function stopAlarm() {
+  if (alarmPlaying) {
+    alarm.pause();
+    alarm.currentTime = 0;
+    alarmPlaying = false;
+  }
+}
+
+/* ---------- MAIN LOOP (THROTTLED) ---------- */
+function loop(ts) {
+  if (!streaming) return;
+
+  // ENROLL page: show local preview smoothly (no server call)
+  if (document.getElementById("enroll").classList.contains("active")) {
+    drawToCanvasForPreview();
+    document.getElementById("videoEnroll").src = canvas.toDataURL("image/jpeg", 0.7);
+    stopAlarm();
+    requestAnimationFrame(loop);
+    return;
+  }
+
+  // ANALYSIS page: throttle network frames
+  if (ts - lastSentAt >= FRAME_INTERVAL_MS) {
+    lastSentAt = ts;
+    sendFrameToBackend();
+  }
+
+  requestAnimationFrame(loop);
+}
+
+/* ---------- DRAW HELPERS ---------- */
+function drawToCanvasForPreview() {
+  // use smaller canvas for preview too (less CPU)
+  canvas.width = SEND_W;
+  canvas.height = SEND_H;
+
+  if (videoElement.videoWidth && videoElement.videoHeight) {
+    ctx.drawImage(videoElement, 0, 0, SEND_W, SEND_H);
+  }
+}
+
+/* ---------- SEND FRAME ---------- */
+function sendFrameToBackend() {
+  if (processing) return; // skip if backend still busy
+
+  // Ensure video is ready
+  if (!videoElement.videoWidth || !videoElement.videoHeight) return;
+
+  processing = true;
+
+  // Downscale before encoding to reduce payload/CPU
+  canvas.width = SEND_W;
+  canvas.height = SEND_H;
+  ctx.drawImage(videoElement, 0, 0, SEND_W, SEND_H);
+
+  const dataURL = canvas.toDataURL("image/jpeg", JPEG_QUALITY);
+
+  fetch(`${BASE_URL}/process_frame`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      image: dataURL,
+      mode: currentMode
+    })
+  })
+    .then(res => res.json())
+    .then(data => {
+      document.getElementById("video").src = data.image;
+
+      if (data.drowsy === true) startAlarm();
+      else stopAlarm();
+
+      processing = false;
     })
     .catch(() => {
-        showToast("Camera permission denied", "error");
+      processing = false;
     });
+}
 
-    /* ---------- PAGE NAV ---------- */
-    function showAnalysis() {
-        stopStreaming();
-        switchPage("analysis");
-        streaming = true;
-        requestAnimationFrame(sendFrame);
-    }
+/* ---------- TOAST ---------- */
+function showToast(message, type) {
+  const toast = document.getElementById("toast");
+  toast.className = type === "success" ? "toast-success" : "toast-error";
+  toast.innerText = message;
+  toast.style.display = "block";
+  setTimeout(() => { toast.style.display = "none"; }, 2500);
+}
 
-    function showEnroll() {
-        stopStreaming();
-        switchPage("enroll");
-        streaming = true;
-        requestAnimationFrame(sendFrame);
-    }
-
-    function goHome() {
-        stopStreaming();
-        stopAlarm();
-        switchPage("home");
-    }
-
-    function stopStreaming() {
-        streaming = false;
-        processing = false;
-
-        document.getElementById("video").src = "";
-        document.getElementById("videoEnroll").src = "";
-    }
-
-    function switchPage(id) {
-        document.querySelectorAll(".section").forEach(s => s.classList.remove("active"));
-        document.getElementById(id).classList.add("active");
-    }
-
-    /* ---------- MODE ---------- */
-    function setMode(mode) {
-        currentMode = mode;
-    }
-
-    /* ---------- ALARM CONTROL ---------- */
-    function startAlarm() {
-        if (!audioUnlocked) return;
-
-        if (!alarmPlaying) {
-            alarm.loop = true;
-            alarm.currentTime = 0;
-            alarm.play().then(() => {
-                alarmPlaying = true;
-            }).catch(err => {
-                console.log("Playback blocked:", err);
-            });
-        }
-    }
-
-    function stopAlarm() {
-        if (alarmPlaying) {
-            alarm.pause();
-            alarm.currentTime = 0;
-            alarmPlaying = false;
-        }
-    }
-
-    /* ---------- FRAME LOOP ---------- */
-    function sendFrame() {
-        if (!streaming) return;
-
-        canvas.width = videoElement.videoWidth;
-        canvas.height = videoElement.videoHeight;
-        ctx.drawImage(videoElement, 0, 0);
-
-        let dataURL = canvas.toDataURL("image/jpeg");
-
-        // ===== ANALYSIS PAGE =====
-        if (document.getElementById("analysis").classList.contains("active")) {
-
-            if (!processing) {
-                processing = true;
-
-                fetch(`${BASE_URL}/process_frame`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        image: dataURL,
-                        mode: currentMode
-                    })
-                })
-                .then(res => res.json())
-                .then(data => {
-
-                    document.getElementById("video").src = data.image;
-
-                    // ---- DROWSY ALARM ----
-                    if (data.drowsy === true) {
-                        startAlarm();
-                    } else {
-                        stopAlarm();
-                    }
-
-                    processing = false;
-                })
-                .catch(() => {
-                    processing = false;
-                });
-            }
-
-        }
-        // ===== ENROLL PAGE (RAW CAMERA ONLY) =====
-        else if (document.getElementById("enroll").classList.contains("active")) {
-            document.getElementById("videoEnroll").src = dataURL;
-            stopAlarm();
-        }
-
-        requestAnimationFrame(sendFrame);
-    }
-
-    /* ---------- TOAST ---------- */
-    function showToast(message, type) {
-        const toast = document.getElementById("toast");
-        toast.className = type === "success" ? "toast-success" : "toast-error";
-        toast.innerText = message;
-        toast.style.display = "block";
-        setTimeout(() => { toast.style.display = "none"; }, 2500);
-    }
-
-    /* ---------- CAPTURE ---------- */
-    function capturePhoto() {
+/* ---------- CAPTURE ---------- */
+function capturePhoto() {
   const name = document.getElementById("nameInput").value.trim();
 
   if (!name) {
@@ -333,14 +362,19 @@
     return;
   }
 
-  // Immediate feedback
   showToast("Capturing...", "success");
 
-  canvas.width = videoElement.videoWidth;
-  canvas.height = videoElement.videoHeight;
-  ctx.drawImage(videoElement, 0, 0);
+  if (!videoElement.videoWidth || !videoElement.videoHeight) {
+    showToast("Camera not ready yet.", "error");
+    return;
+  }
 
-  const dataURL = canvas.toDataURL("image/jpeg");
+  // Capture at slightly higher quality (still downscaled)
+  canvas.width = SEND_W;
+  canvas.height = SEND_H;
+  ctx.drawImage(videoElement, 0, 0, SEND_W, SEND_H);
+
+  const dataURL = canvas.toDataURL("image/jpeg", 0.75);
 
   fetch(`${BASE_URL}/capture/${encodeURIComponent(name)}`, {
     method: "POST",
@@ -351,7 +385,7 @@
     .then(d => {
       if (d.status === "saved") {
         showToast(`Image captured and saved for ${name}`, "success");
-        document.getElementById("nameInput").value = ""; // optional
+        document.getElementById("nameInput").value = "";
       } else if (d.status === "no_face_detected") {
         showToast("No face detected. Try again.", "error");
       } else {
@@ -360,7 +394,7 @@
     })
     .catch(() => showToast("Server error", "error"));
 }
-    </script>
+</script>
 
 
 
